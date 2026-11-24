@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DocGenius Mobile</title>
+    
+    <!-- PWA / Mobile Home Screen Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DocGenius">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#2563eb">
+
+    <!-- Google Font: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: 'var(--theme-color, #2563eb)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- jsPDF & html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        /* Mobile Native Touch & Safe Area Adjustments */
+        body {
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+        .safe-top {
+            padding-top: env(safe-area-inset-top, 0px);
+        }
+        .safe-bottom {
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        /* Hide scrollbars cleanly where appropriate */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Print Override to guarantee crisp A4 printout */
+        @media print {
+            body, html {
+                background: #ffffff !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            #app-header, #bottom-nav, #preview-actions, #view-editor, #view-history, #toast, #confirm-modal {
+                display: none !important;
+            }
+            #view-preview {
+                display: block !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                background: #ffffff !important;
+            }
+            #preview-scale-outer {
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            #preview-wrapper {
+                transform: none !important;
+                width: 210mm !important;
+                min-height: 297mm !important;
+                box-shadow: none !important;
+                margin: 0 !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 h-screen flex flex-col font-sans transition-colors duration-200 overflow-hidden select-none">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 transform transition-all duration-300 -translate-y-6 opacity-0 pointer-events-none flex items-center gap-2 bg-slate-900 dark:bg-slate-800 text-white px-4 py-2.5 rounded-full shadow-xl border border-slate-700 text-sm font-medium whitespace-nowrap">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span id="toast-message">Success!</span>
+    </div>
+
+    <!-- Custom Confirmation Modal (Replaces native confirm/alert) -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl transform transition-all">
+            <h3 id="confirm-title" class="text-lg font-bold text-slate-900 dark:text-white mb-2">Confirm Action</h3>
+            <p id="confirm-message" class="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">Are you sure?</p>
+            <div class="flex gap-3">
+                <button id="confirm-cancel-btn" class="flex-1 py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-sm active:scale-95 transition-transform">Cancel</button>
+                <button id="confirm-ok-btn" class="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-semibold text-sm active:scale-95 transition-transform shadow-sm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Top Header -->
+    <header id="app-header" class="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-4 py-3 flex justify-between items-center z-20 shrink-0 safe-top">
+        <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-sm shadow-blue-600/30">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            </div>
+            <div>
+                <h1 class="text-lg font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 leading-none">DocGenius</h1>
+                <span id="header-doc-badge" class="text-[11px] font-medium text-slate-500 dark:text-slate-400">INV-1001</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button onclick="createNewDocument()" class="flex items-center gap-1.5 px-3 py-2 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl font-semibold text-xs active:scale-95 transition-transform border border-blue-100 dark:border-blue-900/50">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 4v16m8-8H4"></path></svg>
+                New
+            </button>
+            <button onclick="toggleDarkMode()" aria-label="Toggle Theme" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95 transition-transform">
+                <svg id="icon-sun" class="w-5 h-5 hidden text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <svg id="icon-moon" class="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="flex-1 overflow-hidden relative flex flex-col">
+
+        <!-- TAB 1: EDITOR VIEW -->
+        <section id="view-editor" class="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4 select-text">
+            <div class="max-w-xl mx-auto space-y-4">
+
+                <!-- Quick Summary Banner Card -->
+                <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-4 text-white shadow-md flex justify-between items-center">
+                    <div>
+                        <p class="text-xs uppercase tracking-wider text-blue-100 font-semibold">Total Due</p>
+                        <p id="mobile-live-total" class="text-2xl font-extrabold mt-0.5">$ 0.00</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="saveDocument()" class="px-3.5 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-xs rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                            Save
+                        </button>
+                        <button onclick="switchTab('preview')" class="px-3.5 py-2 bg-white text-blue-600 rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-transform">
+                            Preview
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Card 1: Document Details -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-xs border border-slate-200/70 dark:border-slate-800 space-y-3.5">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Document Details</h2>
+                        <button onclick="clearForm()" class="text-xs font-semibold text-red-500 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-95 transition-transform">
+                            Clear Form
+                        </button>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Document Type</label>
+                        <select id="inp-type" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="Invoice">Invoice</option>
+                            <option value="Quotation">Quotation</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Document No</label>
+                            <input type="text" id="inp-number" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Date</label>
+                            <input type="date" id="inp-date" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Customer Details (Bill To) -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-xs border border-slate-200/70 dark:border-slate-800 space-y-3.5">
+                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Bill To (Customer)</h2>
+                    
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Customer Name</label>
+                        <input type="text" id="inp-customer-name" placeholder="Client or Company Name" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Address</label>
+                        <textarea id="inp-customer-address" rows="2" placeholder="Street, City, Postal Code..." class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Phone Number</label>
+                        <input type="tel" id="inp-customer-phone" placeholder="+94 77 123 4567" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <!-- Card 3: Products / Services -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-xs border border-slate-200/70 dark:border-slate-800 space-y-3.5">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Products / Services</h2>
+                        <span id="items-count-badge" class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full">0 items</span>
+                    </div>
+
+                    <div id="items-container" class="space-y-3">
+                        <!-- Dynamic items rendered via JS -->
+                    </div>
+
+                    <button onclick="addItem()" class="w-full py-3 rounded-xl border-2 border-dashed border-blue-300 dark:border-blue-800 text-blue-600 dark:text-blue-400 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-blue-50/50 dark:hover:bg-blue-950/30 active:scale-[0.99] transition-all">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        Add Item Row
+                    </button>
+                </div>
+
+                <!-- Card 4: Payment & Advance -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-xs border border-slate-200/70 dark:border-slate-800 space-y-3">
+                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Summary</h2>
+                    
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Advance Payment</label>
+                        <input type="number" id="inp-advance" min="0" step="0.01" inputmode="decimal" placeholder="0.00" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-sm">
+                        <div class="flex justify-between text-slate-500 dark:text-slate-400">
+                            <span>Subtotal</span>
+                            <span id="summary-subtotal">$ 0.00</span>
+                        </div>
+                        <div class="flex justify-between text-slate-500 dark:text-slate-400">
+                            <span>Advance Paid</span>
+                            <span id="summary-advance" class="text-red-500">- $ 0.00</span>
+                        </div>
+                        <div class="flex justify-between text-base font-extrabold text-slate-900 dark:text-white pt-1">
+                            <span>Balance Due</span>
+                            <span id="summary-total">$ 0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion Card 5: Company Info & Settings -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xs border border-slate-200/70 dark:border-slate-800 overflow-hidden">
+                    <button onclick="toggleSection('company-section')" class="w-full px-4 py-4 flex justify-between items-center text-left active:bg-slate-50 dark:active:bg-slate-800/60 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                            </div>
+                            <div>
+                                <span class="block text-sm font-bold text-slate-800 dark:text-slate-100">Company & Bank Settings</span>
+                                <span class="block text-xs text-slate-500 dark:text-slate-400">Logo, Signature, Bank & Theme</span>
+                            </div>
+                        </div>
+                        <svg id="icon-company-section" class="w-5 h-5 text-slate-400 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+
+                    <div id="company-section" class="hidden px-4 pb-5 pt-2 space-y-4 border-t border-slate-100 dark:border-slate-800">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Company Logo (Auto-Resized)</label>
+                            <input type="file" id="inp-logo" accept="image/*" class="w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 dark:file:bg-slate-800 dark:file:text-blue-400">
+                            <button onclick="removeLogo()" class="text-xs font-medium text-red-500 mt-1.5 inline-block">Remove Logo</button>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Company Name</label>
+                            <input type="text" id="inp-company-name" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Company Address</label>
+                            <textarea id="inp-company-address" rows="2" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Phone</label>
+                                <input type="tel" id="inp-company-phone" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Email</label>
+                                <input type="email" id="inp-company-email" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Currency Symbol</label>
+                                <input type="text" id="inp-currency" placeholder="Rs. / $" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Accent Color</label>
+                                <input type="color" id="inp-color" class="w-full h-[42px] cursor-pointer bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-1 outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Bank Details -->
+                        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Bank Details</h4>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Account Name</label>
+                                <input type="text" id="inp-bank-acc-name" placeholder="Account Holder Name" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Bank Name</label>
+                                    <input type="text" id="inp-bank-name" placeholder="Bank Name" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Account No</label>
+                                    <input type="text" id="inp-bank-acc-no" placeholder="123456789" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Note -->
+                        <div class="pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Additional Note / Terms</h4>
+                            <textarea id="inp-additional-note" rows="3" placeholder="මෙම මිල ගණන් තුළ..." class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+
+                        <!-- Signature Settings -->
+                        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                            <div class="flex justify-between items-center">
+                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Authorized Signature</h4>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="inp-show-signature" class="sr-only peer">
+                                    <div class="w-10 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    <span class="ml-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Show</span>
+                                </label>
+                            </div>
+                            <div>
+                                <input type="file" id="inp-signature" accept="image/*" class="w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 dark:file:bg-slate-800 dark:file:text-blue-400">
+                                <button onclick="removeSignature()" class="text-xs font-medium text-red-500 mt-1.5 inline-block">Remove Signature</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion Card 6: Backup & Restore -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xs border border-slate-200/70 dark:border-slate-800 overflow-hidden">
+                    <button onclick="toggleSection('backup-section')" class="w-full px-4 py-4 flex justify-between items-center text-left active:bg-slate-50 dark:active:bg-slate-800/60 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path></svg>
+                            </div>
+                            <div>
+                                <span class="block text-sm font-bold text-slate-800 dark:text-slate-100">Backup & Restore</span>
+                                <span class="block text-xs text-slate-500 dark:text-slate-400">Export or import JSON data</span>
+                            </div>
+                        </div>
+                        <svg id="icon-backup-section" class="w-5 h-5 text-slate-400 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="backup-section" class="hidden px-4 pb-5 pt-3 space-y-3 border-t border-slate-100 dark:border-slate-800">
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Transfer your invoices and settings between devices using backup files.</p>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="exportBackup()" class="flex items-center justify-center gap-2 px-3 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-xs active:scale-95 transition-transform">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                Export JSON
+                            </button>
+                            <input type="file" id="inp-importBackup" accept=".json" class="hidden">
+                            <button onclick="triggerImport()" class="flex items-center justify-center gap-2 px-3 py-3 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 rounded-xl font-semibold text-xs active:scale-95 transition-transform">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 12m4-4v12"></path></svg>
+                                Import JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- TAB 2: LIVE A4 PREVIEW VIEW -->
+        <section id="view-preview" class="hidden flex-1 overflow-y-auto overflow-x-hidden bg-slate-200/80 dark:bg-slate-950 pt-4 pb-32 px-3 flex flex-col items-center">
+            
+            <!-- Sticky Mobile Action Pill Bar -->
+            <div id="preview-actions" class="sticky top-0 z-10 w-full max-w-md mb-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-2 rounded-2xl shadow-lg border border-slate-200/80 dark:border-slate-800 grid grid-cols-3 gap-2">
+                <button onclick="saveDocument()" class="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 px-3 rounded-xl font-bold text-xs active:scale-95 transition-transform shadow-xs">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Save
+                </button>
+                <button onclick="downloadPDF()" class="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-3 rounded-xl font-bold text-xs active:scale-95 transition-transform shadow-xs">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    PDF
+                </button>
+                <button onclick="window.print()" class="flex items-center justify-center gap-1.5 bg-slate-800 dark:bg-slate-700 text-white py-2.5 px-3 rounded-xl font-bold text-xs active:scale-95 transition-transform shadow-xs">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    Print
+                </button>
+            </div>
+
+            <!-- Auto-Scaled A4 Sheet Container -->
+            <div id="preview-scale-outer" class="w-full flex justify-center overflow-hidden">
+                <div id="preview-wrapper" class="bg-white shadow-2xl w-[210mm] min-h-[297mm] text-black shrink-0 origin-top">
+                    <!-- A4 Document injected by JS -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- TAB 3: HISTORY VIEW -->
+        <section id="view-history" class="hidden flex-1 overflow-y-auto px-4 pt-4 pb-28 select-text">
+            <div class="max-w-xl mx-auto space-y-4">
+                
+                <!-- Header & Search Bar -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Saved Documents</h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Tap any card to edit, duplicate, or delete</p>
+                        </div>
+                        <span id="history-total-count" class="text-xs font-bold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full">0 Docs</span>
+                    </div>
+
+                    <div class="relative">
+                        <input type="search" id="search-history" placeholder="Search customer name or number..." class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl pl-11 pr-4 py-3 text-sm shadow-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                        <svg class="w-5 h-5 text-slate-400 absolute left-3.5 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                </div>
+
+                <!-- Mobile Card List for History -->
+                <div id="history-cards-container" class="space-y-3">
+                    <!-- History cards injected here -->
+                </div>
+
+                <!-- Empty State -->
+                <div id="history-empty" class="hidden bg-white dark:bg-slate-900 rounded-2xl p-10 text-center border border-slate-200/70 dark:border-slate-800">
+                    <div class="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <p class="text-base font-bold text-slate-700 dark:text-slate-200">No documents found</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Your saved invoices and quotations will appear here.</p>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FIXED BOTTOM NAVIGATION BAR (iOS / Android App Style) -->
+    <nav id="bottom-nav" class="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 z-30 safe-bottom shadow-[0_-4px_20px_rgba(0,0,0,0.04)]">
+        <div class="max-w-md mx-auto grid grid-cols-3 h-16">
+            
+            <!-- Tab 1: Editor -->
+            <button onclick="switchTab('editor')" id="tab-btn-editor" class="flex flex-col items-center justify-center gap-1 text-blue-600 dark:text-blue-400 transition-colors relative">
+                <div class="nav-indicator absolute top-0 w-10 h-1 rounded-b-full bg-blue-600 dark:bg-blue-400"></div>
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                <span class="text-[11px] font-bold">Editor</span>
+            </button>
+
+            <!-- Tab 2: Preview -->
+            <button onclick="switchTab('preview')" id="tab-btn-preview" class="flex flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 transition-colors relative">
+                <div class="nav-indicator hidden absolute top-0 w-10 h-1 rounded-b-full bg-blue-600 dark:bg-blue-400"></div>
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                <span class="text-[11px] font-semibold">Preview</span>
+            </button>
+
+            <!-- Tab 3: History -->
+            <button onclick="switchTab('history')" id="tab-btn-history" class="flex flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 transition-colors relative">
+                <div class="nav-indicator hidden absolute top-0 w-10 h-1 rounded-b-full bg-blue-600 dark:bg-blue-400"></div>
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="text-[11px] font-semibold">History</span>
+            </button>
+
+        </div>
+    </nav>
+
+    <!-- Application Logic -->
+    <script>
+        // Native Android print bridge; browser printing remains unchanged outside the APK.
+        if (window.AndroidBridge && window.AndroidBridge.printA4) {
+            window.print = () => window.AndroidBridge.printA4();
+        }
+        // --- Helper: Get Today's Date in YYYY-MM-DD ---
+        function getTodayDate() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // --- Default State (100% Compatible with existing localStorage keys) ---
+        const DEFAULT_SETTINGS = {
+            logo: '',
+            signature: '',
+            showSignature: true,
+            companyName: 'DocGenius Corp',
+            companyAddress: '456 Innovation Drive\nTech City, TX 75001',
+            companyPhone: '+1 (555) 123-4567',
+            companyEmail: 'billing@docgenius.com',
+            currency: '$',
+            themeColor: '#3b82f6',
+            bankAccountName: '',
+            bankName: '',
+            bankAccountNo: '',
+            additionalNote: ''
+        };
+
+        const DEFAULT_DOC = {
+            id: null,
+            type: 'Invoice',
+            number: 'INV-1001',
+            date: getTodayDate(),
+            customerName: 'Acme LLC',
+            customerAddress: '789 Business Ave\nMetropolis, NY 10001',
+            customerPhone: '+1 (555) 987-6543',
+            items: [
+                { desc: 'Web Design & Development', total: 1500 },
+                { desc: 'Hosting (1 Year)', total: 120 }
+            ],
+            advance: 0
+        };
+
+        let state = {
+            settings: { ...DEFAULT_SETTINGS },
+            doc: JSON.parse(JSON.stringify(DEFAULT_DOC)),
+            history: [],
+            darkMode: false,
+            activeTab: 'editor'
+        };
+
+        // --- Custom Confirmation Modal Helper (Replaces native confirm) ---
+        function showConfirm(title, message, onConfirm) {
+            const modal = document.getElementById('confirm-modal');
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            modal.classList.remove('hidden');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                okBtn.onclick = null;
+                cancelBtn.onclick = null;
+            };
+
+            const okBtn = document.getElementById('confirm-ok-btn');
+            const cancelBtn = document.getElementById('confirm-cancel-btn');
+
+            okBtn.onclick = () => {
+                cleanup();
+                onConfirm();
+            };
+            cancelBtn.onclick = cleanup;
+        }
+
+        // --- Initialization ---
+        function init() {
+            loadState();
+            applyDarkMode();
+            bindInputs();
+            renderItemsEditor();
+            updateTotalsUI();
+            renderPreview();
+            setupBackupImport();
+
+            document.getElementById('search-history').addEventListener('input', renderHistory);
+            window.addEventListener('resize', () => {
+                if (state.activeTab === 'preview') {
+                    scalePreviewToFit();
+                }
+            });
+        }
+
+        function loadState() {
+            try {
+                const savedSettings = localStorage.getItem('dg_settings');
+                const savedDoc = localStorage.getItem('dg_current_doc');
+                const savedHistory = localStorage.getItem('dg_history');
+                const savedTheme = localStorage.getItem('dg_dark_mode');
+
+                if (savedSettings) state.settings = { ...state.settings, ...JSON.parse(savedSettings) };
+                if (savedDoc) {
+                    state.doc = JSON.parse(savedDoc);
+                    if (!state.doc.id) {
+                        state.doc.date = getTodayDate();
+                    }
+                } else {
+                    state.doc.date = getTodayDate();
+                }
+                if (savedHistory) state.history = JSON.parse(savedHistory);
+                if (savedTheme) state.darkMode = JSON.parse(savedTheme);
+            } catch (e) {
+                console.error('Error loading local storage state:', e);
+            }
+            document.documentElement.style.setProperty('--theme-color', state.settings.themeColor);
+        }
+
+        function saveLocal() {
+            try {
+                localStorage.setItem('dg_settings', JSON.stringify(state.settings));
+                localStorage.setItem('dg_current_doc', JSON.stringify(state.doc));
+                localStorage.setItem('dg_history', JSON.stringify(state.history));
+                localStorage.setItem('dg_dark_mode', JSON.stringify(state.darkMode));
+                document.documentElement.style.setProperty('--theme-color', state.settings.themeColor);
+            } catch (e) {
+                console.error('Storage quota exceeded:', e);
+            }
+        }
+
+        // --- Mobile Tab Navigation ---
+        function switchTab(tabName) {
+            state.activeTab = tabName;
+            const tabs = ['editor', 'preview', 'history'];
+
+            tabs.forEach(t => {
+                const section = document.getElementById(`view-${t}`);
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const indicator = btn.querySelector('.nav-indicator');
+                const label = btn.querySelector('span');
+
+                if (t === tabName) {
+                    section.classList.remove('hidden');
+                    btn.classList.remove('text-slate-400', 'dark:text-slate-500');
+                    btn.classList.add('text-blue-600', 'dark:text-blue-400');
+                    indicator.classList.remove('hidden');
+                    label.classList.replace('font-semibold', 'font-bold');
+                } else {
+                    section.classList.add('hidden');
+                    btn.classList.add('text-slate-400', 'dark:text-slate-500');
+                    btn.classList.remove('text-blue-600', 'dark:text-blue-400');
+                    indicator.classList.add('hidden');
+                    label.classList.replace('font-bold', 'font-semibold');
+                }
+            });
+
+            if (tabName === 'preview') {
+                renderPreview();
+                requestAnimationFrame(scalePreviewToFit);
+            } else if (tabName === 'history') {
+                renderHistory();
+            }
+        }
+
+        // --- Dynamic A4 Preview Auto-Scaling for Mobile Screens ---
+        function scalePreviewToFit() {
+            const outer = document.getElementById('preview-scale-outer');
+            const wrapper = document.getElementById('preview-wrapper');
+            if (!outer || !wrapper || state.activeTab !== 'preview') return;
+
+            // Reset transform temporarily to measure true A4 pixel dimensions
+            wrapper.style.transform = 'none';
+            const a4WidthPx = wrapper.offsetWidth || 794; // 210mm in px
+            const availableWidth = outer.clientWidth;
+
+            if (availableWidth < a4WidthPx) {
+                const scale = availableWidth / a4WidthPx;
+                wrapper.style.transform = `scale(${scale})`;
+                // Adjust outer container height to match scaled height so there is no blank whitespace below
+                outer.style.height = `${wrapper.offsetHeight * scale}px`;
+            } else {
+                wrapper.style.transform = 'none';
+                outer.style.height = 'auto';
+            }
+        }
+
+        // --- Input Binding ---
+        function bindInputs() {
+            const bindObj = (id, obj, key, isNum = false) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.value = obj[key] !== undefined && obj[key] !== null ? obj[key] : (isNum ? 0 : '');
+                    el.oninput = (e) => {
+                        obj[key] = isNum ? parseFloat(e.target.value) || 0 : e.target.value;
+                        saveLocal();
+                        updateTotalsUI();
+                        renderPreview();
+                    };
+                }
+            };
+
+            bindObj('inp-type', state.doc, 'type');
+            bindObj('inp-number', state.doc, 'number');
+            bindObj('inp-date', state.doc, 'date');
+            bindObj('inp-customer-name', state.doc, 'customerName');
+            bindObj('inp-customer-address', state.doc, 'customerAddress');
+            bindObj('inp-customer-phone', state.doc, 'customerPhone');
+            bindObj('inp-advance', state.doc, 'advance', true);
+
+            bindObj('inp-company-name', state.settings, 'companyName');
+            bindObj('inp-company-address', state.settings, 'companyAddress');
+            bindObj('inp-company-phone', state.settings, 'companyPhone');
+            bindObj('inp-company-email', state.settings, 'companyEmail');
+            bindObj('inp-currency', state.settings, 'currency');
+            bindObj('inp-color', state.settings, 'themeColor');
+
+            bindObj('inp-bank-acc-name', state.settings, 'bankAccountName');
+            bindObj('inp-bank-name', state.settings, 'bankName');
+            bindObj('inp-bank-acc-no', state.settings, 'bankAccountNo');
+            bindObj('inp-additional-note', state.settings, 'additionalNote');
+
+            const sigCheck = document.getElementById('inp-show-signature');
+            if (sigCheck) {
+                sigCheck.checked = state.settings.showSignature !== false;
+                sigCheck.onchange = (e) => {
+                    state.settings.showSignature = e.target.checked;
+                    saveLocal();
+                    renderPreview();
+                };
+            }
+
+            // Auto-Resize Logo
+            document.getElementById('inp-logo').onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 300;
+                        const MAX_HEIGHT = 300;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        state.settings.logo = canvas.toDataURL('image/png');
+                        saveLocal();
+                        renderPreview();
+                        showToast('Logo uploaded');
+                    };
+                    img.src = evt.target.result;
+                };
+                reader.readAsDataURL(file);
+            };
+
+            // Auto-Resize Signature
+            document.getElementById('inp-signature').onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 250;
+                        const MAX_HEIGHT = 150;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        state.settings.signature = canvas.toDataURL('image/png');
+                        saveLocal();
+                        renderPreview();
+                        showToast('Signature uploaded');
+                    };
+                    img.src = evt.target.result;
+                };
+                reader.readAsDataURL(file);
+            };
+        }
+
+        function removeLogo() {
+            state.settings.logo = '';
+            document.getElementById('inp-logo').value = '';
+            saveLocal();
+            renderPreview();
+            showToast('Logo removed');
+        }
+
+        function removeSignature() {
+            state.settings.signature = '';
+            document.getElementById('inp-signature').value = '';
+            saveLocal();
+            renderPreview();
+            showToast('Signature removed');
+        }
+
+        // --- Items Management (Mobile Touch-Friendly Cards) ---
+        function renderItemsEditor() {
+            const container = document.getElementById('items-container');
+            const badge = document.getElementById('items-count-badge');
+            badge.textContent = `${state.doc.items.length} ${state.doc.items.length === 1 ? 'item' : 'items'}`;
+
+            container.innerHTML = state.doc.items.map((item, index) => `
+                <div class="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-2.5">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Item #${index + 1}</span>
+                        <button onclick="removeItem(${index})" class="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-950/60 rounded-lg active:scale-90 transition-transform" aria-label="Remove item">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                    <input type="text" placeholder="Item or service description..." value="${escapeHtml(item.desc)}" oninput="updateItem(${index}, 'desc', this.value)" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-500 dark:text-slate-400 pl-1">Amount (${escapeHtml(state.settings.currency)}):</span>
+                        <input type="number" step="0.01" inputmode="decimal" placeholder="0.00" value="${item.total || ''}" oninput="updateItem(${index}, 'total', this.value)" class="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-bold text-right focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function updateItem(index, field, value) {
+            if (field === 'total') value = parseFloat(value) || 0;
+            state.doc.items[index][field] = value;
+            saveLocal();
+            updateTotalsUI();
+            renderPreview();
+        }
+
+        function addItem() {
+            state.doc.items.push({ desc: '', total: 0 });
+            renderItemsEditor();
+            saveLocal();
+            updateTotalsUI();
+            renderPreview();
+        }
+
+        function removeItem(index) {
+            state.doc.items.splice(index, 1);
+            renderItemsEditor();
+            saveLocal();
+            updateTotalsUI();
+            renderPreview();
+        }
+
+        function calculateTotals() {
+            const subtotal = state.doc.items.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+            const advance = parseFloat(state.doc.advance) || 0;
+            const total = subtotal - advance;
+            return { subtotal, advance, total };
+        }
+
+        function updateTotalsUI() {
+            const { subtotal, advance, total } = calculateTotals();
+            const c = state.settings.currency;
+            document.getElementById('mobile-live-total').textContent = `${c} ${total.toFixed(2)}`;
+            document.getElementById('summary-subtotal').textContent = `${c} ${subtotal.toFixed(2)}`;
+            document.getElementById('summary-advance').textContent = `- ${c} ${advance.toFixed(2)}`;
+            document.getElementById('summary-total').textContent = `${c} ${total.toFixed(2)}`;
+            document.getElementById('header-doc-badge').textContent = `${state.doc.type} • ${state.doc.number}`;
+        }
+
+        // --- A4 Document Preview Rendering ---
+        function renderPreview() {
+            const wrapper = document.getElementById('preview-wrapper');
+            const { subtotal, advance, total } = calculateTotals();
+            const s = state.settings;
+            const d = state.doc;
+            const c = s.currency;
+
+            const formatLines = (str) => (str || '').replace(/\n/g, '<br>');
+
+            wrapper.innerHTML = `
+                <div class="h-full flex flex-col px-10 py-12 bg-white text-black">
+                    
+                    <!-- Header -->
+                    <div class="flex justify-between items-start mb-12">
+                        <div class="flex flex-col max-w-[50%]">
+                            ${s.logo ? `<div style="height: 96px; display: flex; align-items: flex-start; justify-content: flex-start; margin-bottom: 16px;"><img src="${s.logo}" style="max-height: 100%; max-width: 250px; object-fit: contain;" alt="Logo"></div>` : ''}
+                            
+                            <h2 class="text-2xl font-bold text-gray-800">${s.companyName || 'Company Name'}</h2>
+                            <p class="text-sm text-gray-500 mt-1 leading-relaxed">${formatLines(s.companyAddress)}</p>
+                            ${s.companyPhone ? `<p class="text-sm text-gray-500 mt-1">Tel: ${s.companyPhone}</p>` : ''}
+                            ${s.companyEmail ? `<p class="text-sm text-gray-500">Email: ${s.companyEmail}</p>` : ''}
+                        </div>
+                        <div class="text-right">
+                            <h1 class="text-4xl font-black uppercase tracking-wider mb-2" style="color: ${s.themeColor}">${d.type}</h1>
+                            <div class="text-gray-600 mt-4 space-y-1">
+                                <p><span class="font-semibold text-gray-800">No:</span> ${d.number}</p>
+                                <p><span class="font-semibold text-gray-800">Date:</span> ${d.date}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bill To -->
+                    <div class="mb-10">
+                        <div class="border-l-4 pl-4" style="border-color: ${s.themeColor}">
+                            <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Bill To</h3>
+                            <p class="font-bold text-lg text-gray-800">${d.customerName || 'Customer Name'}</p>
+                            <p class="text-sm text-gray-600 mt-1 leading-relaxed">${formatLines(d.customerAddress)}</p>
+                            ${d.customerPhone ? `<p class="text-sm text-gray-600 mt-1">${d.customerPhone}</p>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Items Table -->
+                    <div class="flex-1">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr>
+                                    <th class="py-3 px-4 text-sm font-bold text-white uppercase w-3/4 rounded-tl-lg" style="background-color: ${s.themeColor}">Description</th>
+                                    <th class="py-3 px-4 text-sm font-bold text-white uppercase text-right rounded-tr-lg" style="background-color: ${s.themeColor}">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${d.items.length === 0 ? `<tr><td colspan="2" class="py-6 text-center text-gray-400 italic">No items added</td></tr>` : 
+                                  d.items.map((item, i) => `
+                                    <tr class="border-b border-gray-200 ${i % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}">
+                                        <td class="py-4 px-4 text-gray-800">${item.desc || '-'}</td>
+                                        <td class="py-4 px-4 text-gray-800 text-right font-medium">${c} ${(parseFloat(item.total) || 0).toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+
+                        <!-- Bottom Section: Bank Details & Totals -->
+                        <div class="flex justify-between items-end mt-6">
+                            <!-- Bank Details -->
+                            <div class="w-1/2 pr-4 text-sm text-gray-600">
+                                ${(s.bankAccountName || s.bankName || s.bankAccountNo) ? `
+                                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                    <h4 class="font-bold mb-2 uppercase text-xs" style="color: ${s.themeColor}">Bank Details</h4>
+                                    ${s.bankAccountName ? `<p class="mb-1"><span class="font-semibold text-gray-700">Account Name:</span> ${s.bankAccountName}</p>` : ''}
+                                    ${s.bankName ? `<p class="mb-1"><span class="font-semibold text-gray-700">Bank Name:</span> ${s.bankName}</p>` : ''}
+                                    ${s.bankAccountNo ? `<p><span class="font-semibold text-gray-700">Account No:</span> ${s.bankAccountNo}</p>` : ''}
+                                </div>
+                                ` : ''}
+                            </div>
+                            
+                            <!-- Totals Area -->
+                            <div class="w-2/5">
+                                <div class="flex justify-between py-2 text-gray-600 border-b border-gray-200">
+                                    <span>Subtotal</span>
+                                    <span>${c} ${subtotal.toFixed(2)}</span>
+                                </div>
+                                ${advance > 0 ? `
+                                <div class="flex justify-between py-2 text-gray-600 border-b border-gray-200">
+                                    <span>Advance Paid</span>
+                                    <span class="text-red-500">- ${c} ${advance.toFixed(2)}</span>
+                                </div>
+                                ` : ''}
+                                <div class="flex justify-between py-4 text-xl font-bold text-gray-800">
+                                    <span>Total Due</span>
+                                    <span>${c} ${total.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Note / Terms Box -->
+                        ${s.additionalNote ? `
+                        <div class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800 font-bold">
+                            ${formatLines(s.additionalNote)}
+                        </div>
+                        ` : ''}
+
+                    </div>
+
+                    <!-- Signature Area -->
+                    ${s.showSignature !== false ? `
+                    <div class="mt-8 flex justify-end">
+                        <div class="text-center">
+                            ${s.signature ? 
+                                `<div style="height: 64px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 8px;"><img src="${s.signature}" style="max-height: 100%; max-width: 160px; object-fit: contain;" alt="Signature"></div>` : 
+                                `<div style="height: 64px; margin-bottom: 8px;"></div>`
+                            }
+                            <div class="border-t border-gray-400 w-40 pt-1 text-sm text-gray-600 font-medium">Authorized Signature</div>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- Footer -->
+                    <div class="mt-6 pt-6 border-t border-gray-200 text-center">
+                        <p class="font-bold text-lg mb-1" style="color: ${s.themeColor}">Thank You For Your Business!</p>
+                        <p class="text-xs text-gray-500">If you have any questions concerning this ${d.type.toLowerCase()}, please contact us.</p>
+                        <p class="text-xs text-gray-500 mt-1">${s.companyEmail || ''} | ${s.companyPhone || ''}</p>
+                    </div>
+                </div>
+            `;
+
+            document.title = `${d.type} - ${d.number} | ${s.companyName}`;
+            if (state.activeTab === 'preview') {
+                requestAnimationFrame(scalePreviewToFit);
+            }
+        }
+
+        // --- Document Actions ---
+        function generateAutoNumber(type) {
+            const prefix = type === 'Invoice' ? 'INV-' : 'QUO-';
+            const docs = state.history.filter(h => h.type === type);
+            if (docs.length === 0) return `${prefix}1001`;
+
+            let maxNum = 1000;
+            docs.forEach(doc => {
+                const numPart = parseInt(doc.number.replace(prefix, ''), 10);
+                if (!isNaN(numPart) && numPart > maxNum) maxNum = numPart;
+            });
+            return `${prefix}${maxNum + 1}`;
+        }
+
+        function createNewDocument() {
+            const type = document.getElementById('inp-type').value || 'Invoice';
+            state.doc = {
+                id: null,
+                type: type,
+                number: generateAutoNumber(type),
+                date: getTodayDate(),
+                customerName: '',
+                customerAddress: '',
+                customerPhone: '',
+                items: [{ desc: '', total: 0 }],
+                advance: 0
+            };
+
+            bindInputs();
+            renderItemsEditor();
+            updateTotalsUI();
+            renderPreview();
+            saveLocal();
+            switchTab('editor');
+            showToast(`New ${type} started`);
+        }
+
+        function clearForm() {
+            showConfirm(
+                'Clear Document',
+                'Are you sure you want to clear all customer and item details on this form?',
+                () => {
+                    state.doc.customerName = '';
+                    state.doc.customerAddress = '';
+                    state.doc.customerPhone = '';
+                    state.doc.date = getTodayDate();
+                    state.doc.items = [{ desc: '', total: 0 }];
+                    state.doc.advance = 0;
+
+                    bindInputs();
+                    renderItemsEditor();
+                    updateTotalsUI();
+                    renderPreview();
+                    saveLocal();
+                    showToast('Form cleared');
+                }
+            );
+        }
+
+        function saveDocument() {
+            const { total } = calculateTotals();
+            const docSnapshot = {
+                ...JSON.parse(JSON.stringify(state.doc)),
+                total: total,
+                timestamp: new Date().getTime()
+            };
+
+            if (!docSnapshot.id) {
+                docSnapshot.id = Date.now().toString();
+                state.doc.id = docSnapshot.id;
+                state.history.unshift(docSnapshot);
+            } else {
+                const index = state.history.findIndex(h => h.id === docSnapshot.id);
+                if (index !== -1) {
+                    state.history[index] = docSnapshot;
+                } else {
+                    state.history.unshift(docSnapshot);
+                }
+            }
+
+            saveLocal();
+            renderHistory();
+            showToast('Saved to History');
+        }
+
+        // --- Unscaled Full A4 PDF Generation ---
+        async function downloadPDF() {
+            const element = document.getElementById('preview-wrapper');
+            const outer = document.getElementById('preview-scale-outer');
+
+            // Temporarily reset mobile zoom transform so html2canvas captures 100% crisp full-size A4
+            const prevTransform = element.style.transform;
+            const prevOuterHeight = outer.style.height;
+            element.style.transform = 'none';
+            outer.style.height = 'auto';
+
+            const opt = {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff',
+                windowWidth: 1200
+            };
+
+            try {
+                showToast('Generating PDF...', 2500);
+                const canvas = await html2canvas(element, opt);
+                const imgData = canvas.toDataURL('image/jpeg', 0.98);
+
+                const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                const safeName = (state.doc.customerName || 'Client').replace(/[^a-z0-9]/gi, '_');
+                const filename = `${state.doc.type}_${state.doc.number}_${safeName}.pdf`;
+                if (window.AndroidBridge && window.AndroidBridge.saveBase64File) {
+                    const dataUri = pdf.output('datauristring');
+                    window.AndroidBridge.saveBase64File(filename, dataUri.split(',')[1]);
+                } else {
+                    pdf.save(filename);
+                }
+                showToast('PDF Downloaded!');
+            } catch (error) {
+                console.error('PDF Generation error', error);
+                showToast('Error generating PDF');
+            } finally {
+                // Restore mobile viewport scaling
+                element.style.transform = prevTransform;
+                outer.style.height = prevOuterHeight;
+                if (state.activeTab === 'preview') {
+                    scalePreviewToFit();
+                }
+            }
+        }
+
+        // --- Mobile History Cards Management ---
+        function renderHistory() {
+            const container = document.getElementById('history-cards-container');
+            const emptyState = document.getElementById('history-empty');
+            const countBadge = document.getElementById('history-total-count');
+            const searchTerm = document.getElementById('search-history').value.toLowerCase();
+            const c = state.settings.currency;
+
+            const filtered = state.history.filter(doc =>
+                (doc.number || '').toLowerCase().includes(searchTerm) ||
+                (doc.customerName || '').toLowerCase().includes(searchTerm)
+            );
+
+            countBadge.textContent = `${filtered.length} ${filtered.length === 1 ? 'Doc' : 'Docs'}`;
+
+            if (filtered.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            container.innerHTML = filtered.map(doc => {
+                const isInvoice = doc.type === 'Invoice';
+                return `
+                <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-xs border border-slate-200/70 dark:border-slate-800 space-y-3">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isInvoice ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'}">
+                                    ${doc.type}
+                                </span>
+                                <span class="text-xs font-bold text-slate-500 dark:text-slate-400">${doc.number}</span>
+                            </div>
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white mt-1.5">${escapeHtml(doc.customerName || 'Unnamed Client')}</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">${doc.date}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="block text-[11px] font-semibold text-slate-400 uppercase">Total</span>
+                            <span class="text-base font-extrabold text-slate-900 dark:text-white">${c} ${(parseFloat(doc.total) || 0).toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-2">
+                        <button onclick="openDocument('${doc.id}')" class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold text-xs active:scale-95 transition-transform">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            Edit
+                        </button>
+                        <button onclick="duplicateDocument('${doc.id}')" class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-semibold text-xs active:scale-95 transition-transform">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            Copy
+                        </button>
+                        <button onclick="deleteDocument('${doc.id}')" class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 font-semibold text-xs active:scale-95 transition-transform">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            Delete
+                        </button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function openDocument(id) {
+            const doc = state.history.find(h => h.id === id);
+            if (doc) {
+                state.doc = JSON.parse(JSON.stringify(doc));
+                bindInputs();
+                renderItemsEditor();
+                updateTotalsUI();
+                renderPreview();
+                saveLocal();
+                switchTab('editor');
+                showToast('Document loaded');
+            }
+        }
+
+        function duplicateDocument(id) {
+            const doc = state.history.find(h => h.id === id);
+            if (doc) {
+                const clone = JSON.parse(JSON.stringify(doc));
+                clone.id = null;
+                clone.number = generateAutoNumber(clone.type);
+                clone.date = getTodayDate();
+
+                state.doc = clone;
+                bindInputs();
+                renderItemsEditor();
+                updateTotalsUI();
+                renderPreview();
+                saveLocal();
+                switchTab('editor');
+                showToast('Document duplicated');
+            }
+        }
+
+        function deleteDocument(id) {
+            showConfirm(
+                'Delete Document',
+                'Are you sure you want to permanently delete this saved document?',
+                () => {
+                    state.history = state.history.filter(h => h.id !== id);
+                    if (state.doc.id === id) {
+                        createNewDocument();
+                    }
+                    saveLocal();
+                    renderHistory();
+                    showToast('Document deleted');
+                }
+            );
+        }
+
+        // --- Backup & Restore ---
+        function exportBackup() {
+            const backupData = {
+                settings: localStorage.getItem('dg_settings'),
+                doc: localStorage.getItem('dg_current_doc'),
+                history: localStorage.getItem('dg_history'),
+                theme: localStorage.getItem('dg_dark_mode')
+            };
+
+            const backupText = JSON.stringify(backupData, null, 2);
+            const backupName = "docgenius_backup_" + getTodayDate() + ".json";
+            if (window.AndroidBridge && window.AndroidBridge.saveTextFile) {
+                window.AndroidBridge.saveTextFile(backupName, backupText, "application/json");
+            } else {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(backupText);
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", backupName);
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            }
+            showToast('Backup file downloaded');
+        }
+
+        function triggerImport() {
+            document.getElementById('inp-importBackup').click();
+        }
+
+        function setupBackupImport() {
+            document.getElementById('inp-importBackup').onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    try {
+                        const backup = JSON.parse(evt.target.result);
+                        showConfirm(
+                            'Restore Backup',
+                            'Restoring this backup will overwrite your current settings and document history. Continue?',
+                            () => {
+                                if (backup.settings) localStorage.setItem('dg_settings', backup.settings);
+                                if (backup.doc) localStorage.setItem('dg_current_doc', backup.doc);
+                                if (backup.history) localStorage.setItem('dg_history', backup.history);
+                                if (backup.theme !== undefined) localStorage.setItem('dg_dark_mode', backup.theme);
+
+                                showToast('Backup restored! Reloading...');
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 1200);
+                            }
+                        );
+                    } catch (err) {
+                        showToast('Invalid JSON backup file');
+                    }
+                    document.getElementById('inp-importBackup').value = '';
+                };
+                reader.readAsText(file);
+            };
+        }
+
+        // --- Accordion & Theme Utils ---
+        function toggleSection(id) {
+            const el = document.getElementById(id);
+            const icon = document.getElementById('icon-' + id);
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                el.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        }
+
+        function toggleDarkMode() {
+            state.darkMode = !state.darkMode;
+            applyDarkMode();
+            saveLocal();
+        }
+
+        function applyDarkMode() {
+            const html = document.documentElement;
+            const iconSun = document.getElementById('icon-sun');
+            const iconMoon = document.getElementById('icon-moon');
+
+            if (state.darkMode) {
+                html.classList.add('dark');
+                iconSun.classList.remove('hidden');
+                iconMoon.classList.add('hidden');
+            } else {
+                html.classList.remove('dark');
+                iconSun.classList.add('hidden');
+                iconMoon.classList.remove('hidden');
+            }
+        }
+
+        let toastTimer = null;
+        function showToast(msg, duration = 2600) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = msg;
+
+            toast.classList.remove('-translate-y-6', 'opacity-0');
+            if (toastTimer) clearTimeout(toastTimer);
+
+            toastTimer = setTimeout(() => {
+                toast.classList.add('-translate-y-6', 'opacity-0');
+            }, duration);
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
